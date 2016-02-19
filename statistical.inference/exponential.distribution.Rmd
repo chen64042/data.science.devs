@@ -1,0 +1,164 @@
+---
+title: "Exponential Distribution and Central Limit Theorem"
+author: "Jenhau Chen"
+date: "February 15, 2016"
+output: word_document
+---
+```{r, echo=FALSE}
+plotCount = function(distribution_df, binwidth, xlabel, reference) {
+  g = ggplot(distribution_df, aes(x = x, fill = "Frequence/Count")) 
+  g = g + geom_histogram(colour = "bisque1", alpha = 0.3, binwidth = binwidth) 
+  g = g + geom_freqpoly(colour = "seagreen3", binwidth = binwidth, size=1.2)
+  g = g + geom_vline(xintercept=reference, colour="blue")
+  g = g + labs(x = xlabel, y = "Frequence/Count")
+  g
+}
+
+plotDensity = function(distribution_df, binwidth, xlabel, reference, standard = FALSE) {
+  argslist = if (!standard) list(mean=mean(distribution_df$x), sd=sd(distribution_df$x)) else list(mean=0, sd=1)
+  
+  g = ggplot(distribution_df, aes(x = x, fill = "Density")) 
+  g = g + geom_histogram(colour = "bisque1", alpha = 0.3, binwidth = binwidth, aes(y = ..density..)) 
+  g = g + geom_freqpoly(colour = "seagreen3", binwidth = binwidth, aes(y = ..density..), size=1.2)
+  g = g + stat_function(fun=dnorm, args=argslist, n=sim_n)
+  g = g + geom_vline(xintercept=reference, colour="blue")
+  g = g + labs(x = xlabel, y = "Density")
+  g
+}
+
+```
+# Overview
+This is a simulation to demonstrate Central Limit Theorem by using Exponential Distribution, which has the following properties:  
+  
+* __PDF__ $\lambda e^{-\lambda x}$
+* __CDF__ $1 - e^{-\lambda x}$
+* __Mean__ $\lambda^{-1}$
+* __Variance__ $\lambda^{-2}$
+* __Standard Deviation__ $\lambda^{-1}$
+
+
+# Simulations
+I will be setting $\lambda = 0.2$ with $40$ observations in each simulation. $1000$ simulations will be executed. According to the Law of Large Numbers, or LLN, the mean should converge to the theorectical mean.
+```{r}
+# simulation parameters
+# number of observations
+n = 40
+# number of simulations
+sim_n = 1000
+# rate
+lambda = 0.2
+
+# Theoretical mean
+mu = lambda^(-1)
+
+# Theoretical variance
+sigma_sq = lambda^(-2)
+
+# Theoretical standard deviation
+sigma = lambda^(-1)
+
+# Standard Error
+se = lambda^(-1)/sqrt(n)
+
+# set the seed so our random generation is reproducible
+set.seed(40)
+
+mean_distribution = NULL
+var_distribution = NULL
+sd_distribution = NULL
+clt_distribution = NULL
+```
+
+```{r, echo=FALSE}
+library(ggplot2)
+means <- cumsum(rexp(sim_n, lambda))/(1:sim_n)
+g = ggplot(data.frame(x=1:sim_n, y=means), aes(x=x, y=y))
+g = g + geom_hline(yintercept=mu, colour="red") + geom_line(size=1, colour="blue")
+g = g + labs(x = "Number of Simulations", y = "Cumulative mean")
+g
+```
+
+Now start the simulation for mean and variance. Since I have controlled the seed, __rexp__ will always generate the same set of random variables and the results are comparable. If the seed isn't controlled, each __rexp__ call will gerenrate its own random variables and the __mean__ and __variance__ will have nothing to do with each other.
+
+```{r}
+for(i in 1: sim_n) {
+  mean_distribution = c(mean_distribution, mean(rexp(n, lambda)))
+}
+
+mean_df = data.frame(x = mean_distribution)
+
+for(i in 1: sim_n) {
+  var_distribution = c(var_distribution, var(rexp(n, lambda)))
+}
+
+var_df = data.frame(x = var_distribution)
+
+for(i in 1: sim_n) {
+  sd_distribution = c(sd_distribution, sd(rexp(n, lambda)))
+}
+
+sd_df = data.frame(x = sd_distribution)
+
+
+```
+
+# Sample Mean vs Theoretical Mean
+When comparing with the theoretical mean, $\lambda^{-1}=1/0.2=5$, the following plot shows the sample mean converging to the theoretical mean:
+
+```{r, echo=FALSE}
+binwidth = 0.3
+
+plotCount(mean_df, binwidth, xlabel="Sample Mean", mu)
+```
+
+# Sample Variance vs Theoretical Variance
+Similiarly when comparing with the theoretical variance, $\lambda^{-2}=(1/0.2)^{2}=25$, the following plot shows the sample variance converging to the theoretical variance:
+
+```{r, echo=FALSE}
+vbinwidth = 3
+
+plotCount(var_df, vbinwidth, xlabel = "Sample Varance", sigma_sq)
+```
+
+However notice the long tail on the right. I believe it is due to how variance is calculated. If I use standard deviation instead, the plot becomes more Gaussian:
+
+```{r, echo=FALSE}
+plotCount(sd_df, binwidth, xlabel = "Sample Standard Deviation", sigma)
+```
+
+# Distribution
+According to Central Limit Theorem, CLT, I am expecting the reuslt closely match with a standard normal distribution. I demonstrated this point using a density plot:
+
+## Sample Mean vs. Normal Density
+```{r, echo=FALSE}
+plotDensity(mean_df, binwidth, xlabel = "Sample Mean", mu)
+```
+
+## Sample Variance vs. Normal Density
+```{r, echo=FALSE}
+plotDensity(var_df, vbinwidth, xlabel = "Sample Variance", sigma_sq)
+```
+
+## Sample Standard Deviation vs. Normal Density
+Again I don't like seeing the long tail so I am using standard deviation distribution to validate CLT:
+```{r, echo=FALSE}
+plotDensity(sd_df, binwidth, xlabel = "Sample Deviation", sigma)
+```
+
+## Normalized Distribution
+Lastly according to CLT, I am expecting  
+$$\frac{\bar X_n - \mu}{\sigma / \sqrt{n}}=
+\frac{\sqrt n (\bar X_n - \mu)}{\sigma}
+= \frac{\mbox{Estimate} - \mbox{Mean of estimate}}{\mbox{Std. Err. of estimate}}$$ has a distribution like that of a standard normal for large $n$.
+
+Playing with the similuation data again, I have the following plot which validates this point:
+```{r}
+for(i in 1: sim_n) {
+  clt_distribution = c(clt_distribution, (mean_distribution[i] - mu)/se)
+}
+clt_df = data.frame(x = clt_distribution)
+```
+
+```{r, echo=FALSE}
+plotDensity(clt_df, binwidth, xlabel = "Standard Normal", 0, TRUE)
+```
